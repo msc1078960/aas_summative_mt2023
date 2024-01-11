@@ -1,0 +1,530 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Load libraries
+```{r}
+library(dplyr)
+library(readr)
+library(stargazer)
+library(AER)
+library(fastDummies)
+library(broom.mixed)
+library(mice)
+library(mitools)
+library(quantreg)
+library("olsrr")
+library(xtable)
+library(VGAM)
+library(ggplot2)
+library(car)
+#library(MASS)
+library(plm)
+rm(list=ls())
+gc()
+```
+
+# Data wrangling
+```{r}
+data <- read_csv("/Users/qixuan.khoo.19/Desktop/SDS/assignments/stats/stats_summative/reg_data2.csv")
+data_clean <- read_csv("/Users/qixuan.khoo.19/Desktop/SDS/assignments/stats/stats_summative/reg_data3.csv")
+
+# Create dummy variables for each country
+data <- dummy_cols(data, select_columns= c('CNTRYID'))
+data_clean <- dummy_cols(data_clean, select_columns= c('CNTRYID'))
+
+# Convert gender variable to factor
+data <- mutate(data, gender.f = ifelse(gender == 1, 1, 0))
+data <- mutate(data, age_gender = gender.f * age_month)
+data <- mutate(data, R_gender = gender.f * R)
+
+data_clean <- mutate(data_clean, gender.f = ifelse(gender == 1, 1, 0))
+data_clean <- mutate(data_clean, age_gender = gender.f * age_month)
+data_clean <- mutate(data_clean, R_gender = gender.f * R)
+```
+
+# Regression functions
+## Define tsls functions
+```{r}
+math_tsls <- function(dataset) {
+  math_lst <- list()
+  
+  for (i in 1:10) {
+    imp_math <- dataset %>% select(c(paste("PV", i, "MaTH", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home", starts_with("CNTRYID")))
+    names(imp_math) = sub(paste("PV", i, "MaTH", sep=""), 'Mathematics', names(imp_math))
+    math_lst[[i]] <- imp_math
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Mathematics ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home)  +CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826   | R + R_gender +  gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home)  + + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826,
+       data = math_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+
+science_tsls <- function(dataset) {
+  science_lst <- list()
+  
+  for (i in 1:10) {
+    imp_science <- dataset %>% select(c(paste("PV", i, "SCIE", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home",starts_with("CNTRYID")))
+    names(imp_science) = sub(paste("PV", i, "SCIE", sep=""), 'Science', names(imp_science))
+    science_lst[[i]] <- imp_science
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Science ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 ,
+       data = science_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+
+reading_tsls <- function(dataset) {
+  reading_lst <- list()
+  
+  for (i in 1:10) {
+    imp_read <- dataset %>% select(c(paste("PV", i, "REaD", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home", starts_with("CNTRYID")))
+    names(imp_read) = sub(paste("PV", i, "REaD", sep=""), 'Reading', names(imp_read))
+    reading_lst[[i]] <- imp_read
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Reading ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home) + factor(computer_at_home) + factor(internet_at_home) + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 ,
+       data = reading_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+
+math_tsls.clean <- function(dataset) {
+  math_lst <- list()
+  
+  for (i in 1:10) {
+    imp_math <- dataset %>% select(c(paste("PV", i, "MaTH", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home", starts_with("CNTRYID")))
+    names(imp_math) = sub(paste("PV", i, "MaTH", sep=""), 'Mathematics', names(imp_math))
+    math_lst[[i]] <- imp_math
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Mathematics ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home) + CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724   | R + R_gender +  gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home) + CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724,
+       data = math_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+
+science_tsls.clean <- function(dataset) {
+  science_lst <- list()
+  
+  for (i in 1:10) {
+    imp_science <- dataset %>% select(c(paste("PV", i, "SCIE", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home",starts_with("CNTRYID")))
+    names(imp_science) = sub(paste("PV", i, "SCIE", sep=""), 'Science', names(imp_science))
+    science_lst[[i]] <- imp_science
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Science ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724 | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home) + CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724,data = science_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+
+reading_tsls.clean <- function(dataset) {
+  reading_lst <- list()
+  
+  for (i in 1:10) {
+    imp_read <- dataset %>% select(c(paste("PV", i, "REaD", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home", starts_with("CNTRYID")))
+    names(imp_read) = sub(paste("PV", i, "REaD", sep=""), 'Reading', names(imp_read))
+    reading_lst[[i]] <- imp_read
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Reading ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724 | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home) + factor(computer_at_home) + factor(internet_at_home)+ CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724, data = reading_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+```
+
+## Stargazer output - tsls (main)
+```{r}
+math <- math_tsls(data)
+science.nfe <- science_tsls(data)
+read <- reading_tsls(data)
+
+smry_math <- math[[1]]
+smry_scie <- science[[1]]
+smry_read <- read[[1]]
+
+b <- list(smry_math$estimate, smry_scie$estimate, smry_read$estimate)
+names(b) <- list(smry_math$term, smry_scie$term, smry_read$term)
+se <- list(smry_math$std.error, smry_scie$std.error, smry_read$std.error)
+t_stat <- list(smry_math$statistic, smry_scie$statistic, smry_read$statistic)
+p_val <- list(smry_math$p.value, smry_scie$p.value, smry_read$p.value)
+
+stargazer(math[[2]][[1]], 
+          science[[2]][[1]],
+          read[[2]][[1]],
+         coef = b, 
+         se = se, 
+         t = t_stat, 
+         p = p_val,
+        add.lines = list(c("R-squared", round(math[[3]], digits=3), round(science[[3]], digits=3), round(read[[3]], digits=3))),
+         keep.stat = "n",
+         omit = c("CNTRYID"))
+```
+## Stargazer output - tsls (clean countries)
+```{r}
+math.clean <- math_tsls.clean(data_clean)
+science.clean <- science_tsls.clean(data_clean)
+read.clean <- reading_tsls.clean(data_clean)
+
+smry_math.clean <- math.clean[[1]]
+smry_scie.clean <- science.clean[[1]]
+smry_read.clean <- read.clean[[1]]
+
+b <- list(smry_math.clean$estimate, smry_scie.clean$estimate, smry_read.clean$estimate)
+names(b) <- list(smry_math.clean$term, smry_scie.clean$term, smry_read.clean$term)
+se <- list(smry_math.clean$std.error, smry_scie.clean$std.error, smry_read.clean$std.error)
+t_stat <- list(smry_math.clean$statistic, smry_scie.clean$statistic, smry_read.clean$statistic)
+p_val <- list(smry_math.clean$p.value, smry_scie.clean$p.value, smry_read.clean$p.value)
+
+stargazer(math.clean[[2]][[1]], 
+          science.clean[[2]][[1]],
+          read.clean[[2]][[1]],
+         coef = b, 
+         se = se, 
+         t = t_stat, 
+         p = p_val,
+        add.lines = list(c("R-squared", round(math.clean[[3]], digits=3), round(science.clean[[3]], digits=3), round(read.clean[[3]], digits=3))),
+         keep.stat = "n",
+         omit = c("CNTRYID"))
+```
+## Stargazer output - pooled first-stage age Estimates
+```{r}
+first_ols <- function(dataset) {
+  data %>% select(c("age_month", "age_gender", "gender.f", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home", starts_with("CNTRYID")))
+  model.age <- lm(age_month ~ R + R_gender +  gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826, data = lst[[i]])
+  
+  model.age_gender <- lm(age_gender ~ R + R_gender +  gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826, data = lst[[i]])
+  
+  return(list(model.age, model.age_gender))
+}
+
+first_ols.clean <- function(dataset) {
+  data %>% select(c("age_month", "age_gender", "gender.f", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home", starts_with("CNTRYID")))
+  model.age <- lm(age_month ~ R + R_gender +  gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home) + CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724, data = dataset)
+  
+  model.age_gender <- lm(age_gender ~ R + R_gender +  gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_208 + CNTRYID_250 + CNTRYID_352 + CNTRYID_380 + CNTRYID_528 + CNTRYID_616 + CNTRYID_724, data = dataset)
+  
+  return(list(model.age, model.age_gender))
+}
+  
+ret.first <- first_ols(data)
+ret.first.clean <- first_ols.clean(data_clean)
+
+smry.first.age <- summary(ret.first[[1]])
+smry.first.age_gender <- summary(ret.first[[2]])
+
+smry.first.age.clean <- summary(ret.first.clean[[1]])
+smry.first.age_gender.clean <- summary(ret.first.clean[[2]])
+
+b <- list(smry.first.age$estimate, smry.first.age.clean$estimate, smry.first.age_gender$estimate, smry.first.age_gender.clean$estimate)
+names(b) <- list(smry.first.age$term, smry.first.age.clean$term, smry.first.age_gender$term, smry.first.age_gender.clean$term)
+se <- list(smry.first.age$std.error, smry.first.age.clean$std.error, smry.first.age_gender$std.error, smry.first.age_gender.clean$std.error)
+t_stat <- list(smry.first.age$statistic, smry.first.age.clean$statistic, smry.first.age_gender$statistic, smry.first.age_gender.clean$statistic)
+p_val <- list(smry.first.age$p.value, smry.first.age.clean$p.value, smry.first.age_gender$p.value, smry.first.age_gender.clean$p.value)
+
+stargazer(ret.first[[1]], 
+          ret.first.clean[[1]],
+          ret.first[[2]],
+          ret.first.clean[[2]],
+         coef = b, 
+         se = se, 
+         t = t_stat, 
+         p = p_val,
+         add.lines = list(c("R-squared", round(smry.first.age$adj.r.squared, digits=3), round(smry.first.age.clean$adj.r.squared, digits=3), round(smry.first.age_gender$adj.r.squared, digits=3), round(smry.first.age_gender.clean$adj.r.squared, digits=3))),
+         keep.stat = "n",
+         omit = c("CNTRYID"), type='text')
+```
+
+
+# Model Diagnostic
+## Run PV1 Models
+```{r}
+math_model_tsls <- ivreg(PV1MATH ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC +  factor(computer_at_home) + factor(internet_at_home)  +  CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC +  factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826, data = data)
+
+scie_model_tsls <- ivreg(PV1SCIE ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC +  factor(computer_at_home) + factor(internet_at_home)  +  CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826, data = data)
+
+read_model_tsls <- ivreg(PV1READ ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home)  + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home)  + + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826, data = data)
+
+math_model_ols <- lm(PV1MATH ~ R + R_gender + gender.f + HISEI + PAREDINT + DURECEC +  factor(computer_at_home) + factor(internet_at_home)  +  CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 + factor(grade), data = data)
+
+scie_model_ols <- lm(PV1SCIE ~ R + R_gender + gender.f + HISEI + PAREDINT + DURECEC +  factor(computer_at_home) + factor(internet_at_home)  + factor(grade) + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 + factor(grade), data = data)
+
+read_model_ols <- lm(PV1READ ~ R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home)  + factor(grade) + CNTRYID_203+CNTRYID_208+CNTRYID_233+CNTRYID_246+CNTRYID_250+CNTRYID_276+CNTRYID_348+CNTRYID_352+CNTRYID_372+CNTRYID_380+CNTRYID_392+CNTRYID_410+CNTRYID_484+CNTRYID_528+CNTRYID_616+CNTRYID_703+CNTRYID_724+CNTRYID_756+CNTRYID_792+CNTRYID_826 + factor(grade), data = data)
+```
+
+## Model Diagnostic - VIf Table
+```{r}
+Vif_math <- ols_vif_tol(math_model_ols)
+Vif_scie <- ols_vif_tol(scie_model_ols)
+Vif_read <- ols_vif_tol(read_model_ols)
+xtable(Vif_read %>% select(c('Variables', 'VIf')), type='text')
+```
+
+## Model Diagnostic - Re-estimate model w/o leverage points
+```{r}
+diagnose_hat_values <- function(model, subject) {
+  hat_values <- hatvalues(model)
+  num_predictors <- length(coefficients(model))
+  num_observations <- length(residuals(model))
+  threshold <- 2 * (num_predictors + 1) / num_observations
+  
+  leverage_pts <- which(hat_values > threshold)
+  data2 <- data[-leverage_pts, ]
+  print(paste("There are ", length(leverage_pts), "high-leverage points"))
+  
+  if (subject == "Mathematics") {
+    print("M")
+    model2 <- math_tsls(data2)
+  } else if (subject == "Science") {
+    print("S")
+    model2 <- science_tsls(data2)
+  } else {
+    print("R")
+    model2 <- reading_tsls(data2)
+  }
+  
+  return(list(model2, hat_values, threshold))
+}
+
+math_hat <- diagnose_hat_values(math_model_ols, "Mathematics")
+science_hat <- diagnose_hat_values(scie_model_ols, "Science")
+read_hat <- diagnose_hat_values(read_model_ols, "Reading")
+
+smry_math <- math_hat[[1]][[1]]
+smry_scie <- science_hat[[1]][[1]]
+smry_read <- read_hat[[1]][[1]]
+
+b <- list(smry_math$estimate, smry_scie$estimate, smry_read$estimate)
+names(b) <- list(smry_math$term, smry_scie$term, smry_read$term)
+se <- list(smry_math$std.error, smry_scie$std.error, smry_read$std.error)
+t_stat <- list(smry_math$statistic, smry_scie$std.error, smry_read$std.error)
+p_val <- list(smry_math$p.value, smry_scie$p.value, smry_read$p.value)
+
+stargazer(math_hat[[1]][[2]][[1]], 
+          science_hat[[1]][[2]][[1]],
+          read_hat[[1]][[2]][[1]],
+         coef = b, 
+         se = se, 
+         t = t_stat, 
+         p = p_val,
+        add.lines = list(c("R-squared", round(math_hat[[1]][[3]], digits=3), round(science_hat[[1]][[3]], digits=3), round(read_hat[[1]][[3]], digits=3))),
+         keep.stat = "n",
+         omit = c("CNTRYID"))
+```
+
+## Model Diagnostic - Make hat values plots
+```{r, fig.keep='all'}
+# Create plots
+plot(math_hat[[2]], main = paste("Hat Values Plot for Mathematics"), xlab = "Observation Index", ylab = "Hat Value")
+abline(h = math_hat[[3]], col = "red", lty = 2)  # adding the threshold line
+
+plot(science_hat[[2]], main = paste("Hat Values Plot for Science"), xlab = "Observation Index", ylab = "Hat Value")
+abline(h = science_hat[[3]], col = "red", lty = 2)  # adding the threshold line
+
+plot(read_hat[[2]], main = paste("Hat Values Plot for Reading"), xlab = "Observation Index", ylab = "Hat Value")
+abline(h = read_hat[[3]], col = "red", lty = 2)  # adding the threshold line
+```
+
+## Model Diagnostics - Q-Q Plot Standardized Residuals
+```{r}
+res.m <- rstandard(math_model_ols)
+qqnorm(res.m, main = "Normal Q-Q Plot (Mathematics quantiles)")
+qqline(res.m) 
+
+res.s <- rstandard(scie_model_ols)
+qqnorm(res.s, main="Normal Q-Q Plot (Science quantiles)")
+qqline(res.s) 
+
+res.r <- rstandard(read_model_ols)
+qqnorm(res.r, main = "Normal Q-Q Plot (Reading quantiles)")
+qqline(res.r) 
+```
+
+## Model Diagnostics - Studentized Residuals vs. fitted values plot
+```{r, fig.keep='all'}
+# Studentized Residuals
+ggplot(math_model_ols, aes(x=fitted(math_model_ols), 
+          y=studres(math_model_ols))) + 
+         geom_point()  + geom_hline(yintercept=2, linetype="dotted", col = 'red', size=1.2) + 
+         geom_hline(yintercept=-2, linetype="dotted", col = 'red', size=1.2) +
+        xlab("fitted Values") + ylab("Studentized Residuals") + ggtitle("Studentized Residuals vs. fitted Values Plot for Mathematics") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(scie_model_ols, aes(x=fitted(scie_model_ols), 
+          y=studres(scie_model_ols))) + 
+         geom_point()  + geom_hline(yintercept=2, linetype="dotted", col = 'red', size=1.2) + 
+         geom_hline(yintercept=-2, linetype="dotted", col = 'red', size=1.2) +
+        xlab("fitted Values") + ylab("Studentized Residuals") + ggtitle("Studentized Residuals vs. Fitted Values Plot for Science") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(read_model_ols, aes(x=fitted(read_model_ols), 
+          y=studres(read_model_ols))) + 
+         geom_point()  + geom_hline(yintercept=2, linetype="dotted", col = 'red', size=1.2) + 
+         geom_hline(yintercept=-2, linetype="dotted", col = 'red', size=1.2) +
+        xlab("fitted Values") + ylab("Studentized Residuals") + ggtitle("Studentized Residuals vs. Fitted Values Plot for Reading") + theme(plot.title = element_text(hjust = 0.5))
+
+# Residuals
+ggplot(math_model_ols, aes(x=fitted(math_model_ols), 
+          y=residuals(math_model_ols))) + 
+         geom_point()  + geom_hline(yintercept=2, linetype="dotted", col = 'red', size=1.2) + 
+         geom_hline(yintercept=-2, linetype="dotted", col = 'red', size=1.2) +
+        xlab("fitted Values") + ylab("Residuals") + ggtitle("Residuals vs. fitted Values Plot for Mathematics") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(scie_model_ols, aes(x=fitted(scie_model_ols), 
+          y=residuals(scie_model_ols))) + 
+         geom_point()  + geom_hline(yintercept=2, linetype="dotted", col = 'red', size=1.2) + 
+         geom_hline(yintercept=-2, linetype="dotted", col = 'red', size=1.2) +
+        xlab("fitted Values") + ylab("Residuals") + ggtitle("Residuals vs. Fitted Values Plot for Science") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(read_model_ols, aes(x=fitted(read_model_ols), 
+          y=residuals(read_model_ols))) + 
+         geom_point()  + geom_hline(yintercept=2, linetype="dotted", col = 'red', size=1.2) + 
+         geom_hline(yintercept=-2, linetype="dotted", col = 'red', size=1.2) +
+        xlab("fitted Values") + ylab("Residuals") + ggtitle("Residuals vs. Fitted Values Plot for Reading") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Model Diagnostics - Standardized Residuals vs. assigned Relative age plot
+```{r, fig.keep='all'}
+# Standardized Residuals
+ggplot(math_model_ols, aes(x=data$R, 
+          y=rstandard(math_model_ols))) + 
+         geom_point()  +
+        xlab("assigned Relative age (months)") + ylab("Standardized Residuals") + ggtitle("Standardized Residuals vs. Assigned Relative age Plot for Mathematics") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(scie_model_ols, aes(x=data$R, 
+          y=rstandard(scie_model_ols))) + 
+         geom_point()  + 
+        xlab("assigned Relative age (months)") + ylab("Standardized Residuals") + ggtitle("Standardized Residuals vs. Assigned Relative age Plot for Science") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(read_model_ols, aes(x=data$R, 
+          y=rstandard(read_model_ols))) + 
+         geom_point()  +
+        xlab("assigned Relative age (months)") + ylab("Standardized Residuals") + ggtitle("Standardized Residuals vs. Assigned Relative age Plot for Reading") + theme(plot.title = element_text(hjust = 0.5))
+```
+## Model Diagnostic - Instrument Exogeneity
+```{r}
+s <- summary(math_model_tsls, diagnostics=TRUE)
+s
+```
+
+
+# Scrap
+```{r}
+math_tsls.nfe <- function(dataset) {
+  math_lst <- list()
+  
+  for (i in 1:10) {
+    imp_math <- dataset %>% select(c(paste("PV", i, "MaTH", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home"))
+    names(imp_math) = sub(paste("PV", i, "MaTH", sep=""), 'Mathematics', names(imp_math))
+    math_lst[[i]] <- imp_math
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Mathematics ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + factor(computer_at_home) + factor(internet_at_home) | R + R_gender +  gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home),
+       data = math_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+
+science_tsls.nfe <- function(dataset) {
+  science_lst <- list()
+  
+  for (i in 1:10) {
+    imp_science <- dataset %>% select(c(paste("PV", i, "SCIE", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home"))
+    names(imp_science) = sub(paste("PV", i, "SCIE", sep=""), 'Science', names(imp_science))
+    science_lst[[i]] <- imp_science
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Science ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home) | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home) , data = science_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+
+reading_tsls.nfe <- function(dataset) {
+  reading_lst <- list()
+  
+  for (i in 1:10) {
+    imp_read <- dataset %>% select(c(paste("PV", i, "REaD", sep=""),"age_month", "age_gender", "gender.f", "birth_month", "R", "R_gender", "gender.f", "HISEI", "PAREDINT", "DURECEC", "grade", "computer_at_home", "internet_at_home"))
+    names(imp_read) = sub(paste("PV", i, "REaD", sep=""), 'Reading', names(imp_read))
+    reading_lst[[i]] <- imp_read
+  }
+  
+  models <- lapply(1:10, function(i) {
+    ivreg(Reading ~ age_month + age_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home) | R + R_gender + gender.f + HISEI + PAREDINT + DURECEC + +  factor(computer_at_home) + factor(internet_at_home), data = reading_lst[[i]])
+  })
+  
+  model <- mice::pool(models)
+  smry <- summary(model)
+  
+  return(list(smry, models, pool.r.squared(model)))
+}
+```
+
+## Without Country fEs
+```{r}
+math.nfe <- math_tsls.nfe(data)
+science.nfe <- science_tsls.nfe(data)
+read.nfe <- reading_tsls.nfe(data)
+
+smry_math.nfe <- math.nfe[[1]]
+smry_scie.nfe <- science.nfe[[1]]
+smry_read.nfe <- read.nfe[[1]]
+
+
+b <- list(smry_math.nfe$estimate, smry_scie.nfe$estimate, smry_read.nfe$estimate)
+names(b) <- list(smry_math.nfe$term, smry_scie.nfe$term, smry_read.nfe$term)
+se <- list(smry_math.nfe$std.error, smry_scie.nfe$std.error, smry_read.nfe$std.error)
+t_stat <- list(smry_math.nfe$statistic, smry_scie.nfe$statistic, smry_read.nfe$statistic)
+p_val <- list(smry_math.nfe$p.value, smry_scie.nfe$p.value, smry_read.nfe$p.value)
+
+stargazer(math.nfe[[2]][[1]], 
+          science.nfe[[2]][[1]],
+          read.nfe[[2]][[1]],
+         coef = b, 
+         se = se, 
+         t = t_stat, 
+         p = p_val,
+        add.lines = list(c("R-squared", round(math.nfe[[3]], digits=3), round(science.nfe[[3]], digits=3), round(read.nfe[[3]], digits=3))),
+         keep.stat = "n",
+         omit = c("CNTRYID"), type="text")
+```
